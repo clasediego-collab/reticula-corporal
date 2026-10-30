@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Retícula Corporal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap">
+<style>
+:root{
+  --void:#070a0d; --surface:#0d1319; --surface-2:#121a22; --line:#1e2b36;
+  --ink:#dfe9ef; --ink-dim:#7d929f;
+  --cyan:#36d6e0; --magenta:#ff4fb0; --amber:#ffc24a;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --display:"Syne", "IBM Plex Mono", sans-serif;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--void); color:var(--ink);
+  font-family:var(--mono); font-size:13px; line-height:1.45;
+  overflow:hidden;
+}
+#app{display:grid; grid-template-columns:1fr 296px; height:100%}
+#stage{position:relative; background:#000; overflow:hidden; min-width:0}
+#view{display:block; width:100%; height:100%}
+#video{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+#hud{
+  position:absolute; left:0; top:0; right:0;
+  display:flex; gap:14px; align-items:baseline; flex-wrap:wrap;
+  padding:14px max(16px, env(safe-area-inset-left,0px)) 14px max(16px, env(safe-area-inset-left,0px));
+  font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-dim);
+  background:linear-gradient(180deg, rgba(7,10,13,.78), rgba(7,10,13,0));
+  pointer-events:none; z-index:3;
+}
+#hud b{font-weight:600; color:var(--cyan); font-variant-numeric:tabular-nums}
+#hud .mag{color:var(--magenta)}
+#hud .ok{color:var(--cyan)}
+#hud h1{
+  font-family:var(--display); font-size:15px; letter-spacing:.14em;
+  margin:0 8px 0 0; color:var(--ink); text-transform:uppercase;
+}
+#gate{
+  position:absolute; inset:0; z-index:5;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+  padding:0 max(16px, env(safe-area-inset-left,0px));
+  text-align:center;
+  background:radial-gradient(90% 70% at 50% 45%, #0f1a22 0%, #070a0d 70%);
+}
+#gate h2{font-family:var(--display); font-size:clamp(22px,4vw,34px); letter-spacing:.06em; margin:0; text-wrap:balance}
+#gate p{max-width:48ch; color:var(--ink-dim); margin:0; font-size:12.5px}
+#gate.off{display:none}
+.big{
+  font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+  padding:13px 26px; border-radius:2px; cursor:pointer;
+  background:var(--cyan); color:#04161a; border:0; font-weight:600;
+}
+.big:hover{background:#4ff0fa}
+.big:disabled{opacity:.45; cursor:progress}
+#gate small{color:#5b707e; font-size:11px; letter-spacing:.05em}
+#gate code{background:var(--surface-2); padding:1px 5px; border-radius:2px; color:var(--cyan)}
+#err{color:var(--amber); font-size:12px; max-width:46ch; min-height:1em}
+#panel{
+  background:var(--surface); border-left:1px solid var(--line);
+  overflow-y:auto; min-width:0;
+  padding-block:16px 28px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+}
+.sec{border-top:1px solid var(--line); padding-top:14px; margin-top:16px}
+.sec:first-of-type{border-top:0; margin-top:0; padding-top:0}
+.sec > h3{
+  font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--ink-dim); margin:0 0 12px; font-weight:500;
+}
+.ctl{display:flex; flex-direction:column; gap:5px; margin-bottom:13px}
+.ctl .row{display:flex; justify-content:space-between; align-items:baseline; gap:8px}
+.ctl label{font-size:11.5px; letter-spacing:.03em; color:var(--ink)}
+.ctl output{font-size:11px; color:var(--cyan); font-variant-numeric:tabular-nums}
+input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:18px; background:transparent; margin:0; cursor:ew-resize;
+}
+input[type=range]::-webkit-slider-runnable-track{height:2px; background:var(--line)}
+input[type=range]::-moz-range-track{height:2px; background:var(--line)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:12px; height:12px; margin-top:-5px; border-radius:50%;
+  background:var(--cyan); border:0;
+}
+input[type=range]::-moz-range-thumb{width:12px; height:12px; border-radius:50%; background:var(--cyan); border:0}
+input[type=range]:focus-visible{outline:1px solid var(--magenta); outline-offset:3px}
+.seg{display:grid; grid-template-columns:repeat(3,1fr); gap:4px}
+.seg button{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+  padding:8px 2px; background:var(--surface-2); color:var(--ink-dim);
+  border:1px solid var(--line); border-radius:2px; cursor:pointer;
+}
+.seg button[aria-pressed=true]{background:var(--cyan); color:#04161a; border-color:var(--cyan); font-weight:600}
+.toggles{display:flex; flex-direction:column; gap:7px}
+.sw{display:flex; align-items:center; gap:9px; cursor:pointer; font-size:11.5px}
+.sw input{accent-color:var(--cyan); width:14px; height:14px; margin:0}
+.acts{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px}
+.acts button{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+  padding:9px 4px; background:transparent; color:var(--ink);
+  border:1px solid var(--line); border-radius:2px; cursor:pointer;
+}
+.acts button:hover{border-color:var(--cyan); color:var(--cyan)}
+.note{font-size:10.5px; color:#5b707e; line-height:1.5; margin:12px 0 0}
+kbd{
+  font-family:var(--mono); font-size:10px; background:var(--surface-2);
+  border:1px solid var(--line); border-radius:2px; padding:1px 4px; color:var(--ink-dim);
+}
+body.clean #panel{display:none}
+body.clean #hud{opacity:0}
+body.clean #app{grid-template-columns:1fr}
+@media (max-width:860px){
+  body{overflow:auto}
+  #app{grid-template-columns:1fr; height:auto; min-height:100%}
+  #stage{height:62vh; min-height:360px}
+  #panel{border-left:0; border-top:1px solid var(--line)}
+}
+@media (prefers-reduced-motion:reduce){ .big{transition:none} }
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="stage">
+    <canvas id="view"></canvas>
+    <video id="video" playsinline muted></video>
+    <div id="hud">
+      <h1>Retícula Corporal</h1>
+      <span>fps <b id="r-fps">—</b></span>
+      <span>manos <b id="r-hands">0</b></span>
+      <span>cuerpo <b id="r-pose">no</b></span>
+      <span>sensor <b id="r-remote">—</b></span>
+      <span>puntos activos <b class="mag" id="r-pts">0</b></span>
+      <span id="r-mode">rastreo —</span>
+    </div>
+    <div id="gate">
+      <h2>Párate frente a la cámara y deforma la malla</h2>
+      <p>La retícula responde a las 21 articulaciones de cada mano y al esqueleto del cuerpo. También puedes conectar un celular como sensor de manos: abre <code>/sensor</code> en tu móvil y deja esta pantalla sin cámara local.</p>
+      <button class="big" id="start">Activar cámara local</button>
+      <div id="err" role="status"></div>
+      <small>Requiere https o localhost · Chrome / Edge recomendados</small>
+    </div>
+  </section>
+
+  <aside id="panel">
+    <div class="sec">
+      <h3>Interacción</h3>
+      <div class="ctl">
+        <div class="row"><label for="c-radius">Sensibilidad · radio</label><output id="o-radius"></output></div>
+        <input type="range" id="c-radius" min="40" max="420" step="5" value="170">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-force">Fuerza</label><output id="o-force"></output></div>
+        <input type="range" id="c-force" min="0" max="4" step="0.05" value="1.6">
+      </div>
+      <div class="ctl">
+        <div class="row"><label>Campo</label><output id="o-mode">empuje</output></div>
+        <div class="seg" id="c-mode">
+          <button data-mode="push" aria-pressed="true">Empuje</button>
+          <button data-mode="pull" aria-pressed="false">Atracción</button>
+          <button data-mode="vortex" aria-pressed="false">Vórtice</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-smooth">Suavizado de rastreo</label><output id="o-smooth"></output></div>
+        <input type="range" id="c-smooth" min="0" max="0.9" step="0.02" value="0.5">
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Sensor de manos</h3>
+      <div class="toggles">
+        <label class="sw"><input type="checkbox" id="c-remote" checked> Aceptar sensor móvil</label>
+      </div>
+      <p class="note">Estado del enlace en el HUD (arriba). El sensor se conecta solo cuando abres <code>/sensor</code> en el celular.</p>
+    </div>
+
+    <div class="sec">
+      <h3>Imagen de cámara</h3>
+      <div class="ctl">
+        <div class="row"><label for="c-op">Opacidad</label><output id="o-op"></output></div>
+        <input type="range" id="c-op" min="0" max="1" step="0.01" value="0.22">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-sat">Desaturación</label><output id="o-sat"></output></div>
+        <input type="range" id="c-sat" min="0" max="1" step="0.01" value="0.75">
+      </div>
+      <div class="toggles">
+        <label class="sw"><input type="checkbox" id="c-mirror" checked> Espejo (modo instalación)</label>
+        <label class="sw"><input type="checkbox" id="c-skel"> Dibujar esqueleto</label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Malla</h3>
+      <div class="ctl">
+        <div class="row"><label for="c-dens">Densidad</label><output id="o-dens"></output></div>
+        <input type="range" id="c-dens" min="10" max="64" step="1" value="34">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-stiff">Elasticidad</label><output id="o-stiff"></output></div>
+        <input type="range" id="c-stiff" min="0.004" max="0.18" step="0.002" value="0.045">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-damp">Amortiguación</label><output id="o-damp"></output></div>
+        <input type="range" id="c-damp" min="0.78" max="0.985" step="0.005" value="0.9">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-width">Grosor de línea</label><output id="o-width"></output></div>
+        <input type="range" id="c-width" min="0.4" max="3.5" step="0.1" value="1.1">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="c-trail">Estela</label><output id="o-trail"></output></div>
+        <input type="range" id="c-trail" min="0" max="0.94" step="0.02" value="0.4">
+      </div>
+      <div class="toggles">
+        <label class="sw"><input type="checkbox" id="c-dots" checked> Nodos visibles</label>
+        <label class="sw"><input type="checkbox" id="c-hands" checked> Rastrear manos</label>
+        <label class="sw"><input type="checkbox" id="c-body" checked> Rastrear cuerpo</label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Sala</h3>
+      <div class="acts">
+        <button id="b-full">Pantalla completa</button>
+        <button id="b-clean">Ocultar interfaz</button>
+        <button id="b-shot">Capturar PNG</button>
+        <button id="b-reset">Reiniciar malla</button>
+      </div>
+      <p class="note"><kbd>H</kbd> oculta la interfaz · <kbd>F</kbd> pantalla completa · <kbd>R</kbd> reinicia la malla.</p>
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker, PoseLandmarker }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+/* ---------------- estado ---------------- */
+const P = {
+  radius:170, force:1.6, mode:"push", smooth:0.5,
+  opacity:0.22, desat:0.75, mirror:true, skeleton:false,
+  density:34, stiff:0.045, damp:0.9, width:1.1, trail:0.4,
+  dots:true, hands:true, body:true, remote:true
+};
+
+const stage  = document.getElementById("stage");
+const canvas = document.getElementById("view");
+const ctx    = canvas.getContext("2d", { alpha:false });
+const video  = document.getElementById("video");
+const gate   = document.getElementById("gate");
+const errBox = document.getElementById("err");
+
+let W = 0, H = 0, DPR = 1;
+let cols = 0, rows = 0, N = null;
+let influencers = [];
+let handLM = null, poseLM = null, fileset = null;
+let tracking = "init";
+let lastVideoTime = -1, handsCount = 0, poseOn = false;
+
+/* ---------------- sensor remoto ---------------- */
+let wsRemote = null;
+let remoteHands = null;     // Array de manos con {x, y} normalizados
+let remoteFresh = 0;        // Timestamp del último mensaje
+let remoteState = "desconectado";
+
+const rRemote = document.getElementById("r-remote");
+
+function connectRemote() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const url = `${proto}//${location.host}/?role=desktop`;
+  try {
+    wsRemote = new WebSocket(url);
+    wsRemote.onopen = () => {
+      remoteState = "conectado";
+      rRemote.textContent = "conectado";
+      rRemote.className = "ok";
+    };
+    wsRemote.onclose = () => {
+      remoteState = "desconectado";
+      rRemote.textContent = "desconectado";
+      rRemote.className = "";
+      setTimeout(connectRemote, 1500);
+    };
+    wsRemote.onerror = () => {
+      rRemote.textContent = "error";
+      rRemote.className = "";
+    };
+    wsRemote.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (Array.isArray(msg.hands)) {
+          remoteHands = msg.hands;
+          remoteFresh = performance.now();
+          // Auto-cerrar la cortina si llega sensor y aún no hay cámara local
+          if (!gate.classList.contains("off")) gate.classList.add("off");
+        }
+      } catch {}
+    };
+  } catch {}
+}
+
+/* ---------------- malla ---------------- */
+function buildGrid(){
+  if (W < 2 || H < 2) return;
+  cols = Math.max(6, Math.round(P.density));
+  const cell = W / (cols - 1);
+  rows = Math.max(4, Math.round(H / cell) + 1);
+  const offY = (H - (rows - 1) * cell) / 2;
+  N = new Float32Array(cols * rows * 6);
+  for (let r = 0; r < rows; r++){
+    for (let c = 0; c < cols; c++){
+      const i = (r * cols + c) * 6;
+      const x = c * cell, y = offY + r * cell;
+      N[i] = x; N[i+1] = y; N[i+2] = 0; N[i+3] = 0; N[i+4] = x; N[i+5] = y;
+    }
+  }
+}
+function resetGrid(){
+  if (!N) return;
+  for (let i = 0; i < N.length; i += 6){
+    N[i] = N[i+4]; N[i+1] = N[i+5]; N[i+2] = 0; N[i+3] = 0;
+  }
+}
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = stage.getBoundingClientRect();
+  W = Math.max(2, Math.round(r.width));
+  H = Math.max(2, Math.round(r.height));
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  buildGrid();
+}
+new ResizeObserver(resize).observe(stage);
+
+/* ---------------- encuadre cover del video ---------------- */
+function fit(){
+  const vw = video.videoWidth || 16, vh = video.videoHeight || 9;
+  const s = Math.max(W / vw, H / vh);
+  const dw = vw * s, dh = vh * s;
+  return { dx:(W - dw) / 2, dy:(H - dh) / 2, dw, dh };
+}
+function toCanvas(lm, f){
+  const nx = P.mirror ? 1 - lm.x : lm.x;
+  return { x:f.dx + nx * f.dw, y:f.dy + lm.y * f.dh };
+}
+
+/* ---------------- cámara ---------------- */
+async function startCamera(){
+  const btn = document.getElementById("start");
+  btn.disabled = true; btn.textContent = "Conectando…"; errBox.textContent = "";
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ ideal:1280 }, height:{ ideal:720 }, facingMode:"user" }, audio:false
+    });
+    video.srcObject = stream;
+    await video.play();
+    gate.classList.add("off");
+    btn.blur();           // bug 3: devolver foco para que H/F/R funcionen
+    resize();
+    loadModels();
+  }catch(e){
+    btn.disabled = false; btn.textContent = "Activar cámara local";
+    let msg;
+    switch (e && e.name) {
+      case "NotAllowedError":     msg = "Permiso de cámara bloqueado. Actívalo en el candado de la barra de direcciones."; break;
+      case "NotFoundError":       msg = "No se encontró ninguna cámara en este equipo."; break;
+      case "NotReadableError":    msg = "La cámara está en uso por otra aplicación (Zoom, Meet, OBS…)."; break;
+      case "OverconstrainedError":msg = "La cámara no admite la resolución solicitada."; break;
+      case "SecurityError":       msg = "Contexto inseguro: la página debe servirse por https o desde localhost."; break;
+      default:                    msg = "No se pudo abrir la cámara: " + (e && e.message ? e.message : e);
+    }
+    errBox.textContent = msg;
+  }
+}
+document.getElementById("start").addEventListener("click", startCamera);
+
+/* ---------------- modelos ---------------- */
+async function crearLandmarkers(delegate){
+  handLM = await HandLandmarker.createFromOptions(fileset, {
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate
+    },
+    runningMode:"VIDEO", numHands:2, minHandDetectionConfidence:0.5, minTrackingConfidence:0.5
+  });
+  poseLM = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate
+    },
+    runningMode:"VIDEO", numPoses:1, minPoseDetectionConfidence:0.5, minTrackingConfidence:0.5
+  });
+}
+
+async function loadModels(){
+  setMode("cargando modelos…");
+  try{
+    fileset = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    // bug 4: GPU → CPU fallback
+    try { await crearLandmarkers("GPU"); }
+    catch { await crearLandmarkers("CPU"); }
+    tracking = "mediapipe"; setMode("rastreo articulado");
+  }catch(e){
+    tracking = "movimiento"; setMode("rastreo por movimiento (respaldo)");
+    console.warn("MediaPipe no disponible, se usa diferencia de cuadros:", e);
+  }
+}
+function setMode(t){ document.getElementById("r-mode").textContent = t; }
+
+/* ---------------- respaldo: diferencia de cuadros ---------------- */
+const dw = 64, dh = 48;
+const dcan = document.createElement("canvas");
+dcan.width = dw; dcan.height = dh;
+const dctx = dcan.getContext("2d", { willReadFrequently:true });
+let prevGray = null;
+
+function motionPoints(f){
+  dctx.drawImage(video, 0, 0, dw, dh);
+  const d = dctx.getImageData(0, 0, dw, dh).data;
+  const gray = new Float32Array(dw * dh);
+  for (let i = 0, p = 0; i < gray.length; i++, p += 4)
+    gray[i] = (d[p] * 0.299 + d[p+1] * 0.587 + d[p+2] * 0.114);
+  const pts = [];
+  if (prevGray){
+    for (let y = 0; y < dh; y += 2){
+      for (let x = 0; x < dw; x += 2){
+        const i = y * dw + x;
+        if (Math.abs(gray[i] - prevGray[i]) > 22){
+          const nx = P.mirror ? 1 - (x + 0.5) / dw : (x + 0.5) / dw;
+          pts.push({ x:f.dx + nx * f.dw, y:f.dy + ((y + 0.5) / dh) * f.dh, w:1 });
+          if (pts.length > 90) { y = dh; break; }
+        }
+      }
+    }
+  }
+  prevGray = gray;
+  return pts;
+}
+
+/* ---------------- huesos ---------------- */
+const POSE_BONES = [[11,13],[13,15],[12,14],[14,16],[11,12],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+const HAND_BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+let cached = [];
+let lastHands = [];   // manos locales
+let lastPose = null;  // cuerpo local
+
+function collect(f){
+  const out = [];
+  const ts = performance.now();
+  const remoteActive = P.remote && remoteHands && (ts - remoteFresh < 600);
+
+  // ---- detección local (solo si hay cuadro nuevo) ----
+  if (video.readyState >= 2 && video.currentTime !== lastVideoTime){
+    lastVideoTime = video.currentTime;
+
+    if (tracking === "mediapipe"){
+      try{
+        if (P.hands && handLM){
+          const r = handLM.detectForVideo(video, ts);
+          lastHands = r.landmarks || [];          // bug 2: siempre reasignar
+          handsCount = lastHands.length;
+          for (const hand of lastHands){
+            for (const lm of hand){
+              const p = toCanvas(lm, f);
+              out.push({ x:p.x, y:p.y, w:1.25 });
+            }
+          }
+        } else { handsCount = 0; lastHands = []; }
+
+        if (P.body && poseLM){
+          const r = poseLM.detectForVideo(video, ts);
+          const body = (r.landmarks && r.landmarks[0]) || null;
+          poseOn = !!body;
+          lastPose = body;                        // bug 2: se limpia al perder cuerpo
+          if (body){
+            for (const [a, b] of POSE_BONES){
+              const A = toCanvas(body[a], f), B = toCanvas(body[b], f);
+              for (let t = 0; t <= 1.0001; t += 0.25)
+                out.push({ x:A.x + (B.x - A.x) * t, y:A.y + (B.y - A.y) * t, w:0.85 });
+            }
+            const head = toCanvas(body[0], f);
+            out.push({ x:head.x, y:head.y, w:1.4 });
+          }
+        } else { poseOn = false; lastPose = null; }
+      }catch(e){ /* un cuadro perdido no rompe la sesión */ }
+    } else if (tracking === "movimiento"){
+      // bug 1: solo recalcular cuando el video entrega cuadro nuevo
+      handsCount = 0; poseOn = false;
+      lastHands = []; lastPose = null;
+      const mp = motionPoints(f);
+      for (const p of mp) out.push(p);
+    }
+  } else {
+    // entre cuadros de video: reusar los puntos locales del último cálculo
+    for (const p of cached) out.push(p);
+  }
+
+  // ---- manos remotas ----
+  if (remoteActive && remoteHands.length){
+    for (const hand of remoteHands){
+      for (const lm of hand){
+        const nx = P.mirror ? 1 - lm.x : lm.x;
+        out.push({ x:f.dx + nx * f.dw, y:f.dy + lm.y * f.dh, w:1.25 });
+      }
+    }
+    handsCount = Math.max(handsCount, remoteHands.length);
+  }
+
+  cached = out;
+  return cached;
+}
+
+/* ---------------- física ---------------- */
+function simulate(pts){
+  if (!N) return 0;
+  const R = P.radius, R2 = R * R, F = P.force * 2.4;
+  const stiff = P.stiff, damp = P.damp;
+  const mode = P.mode;
+  let active = 0;
+  for (let i = 0; i < N.length; i += 6){
+    let x = N[i], y = N[i+1], vx = N[i+2], vy = N[i+3];
+    vx += (N[i+4] - x) * stiff;
+    vy += (N[i+5] - y) * stiff;
+    for (let k = 0; k < pts.length; k++){
+      const p = pts[k];
+      const dx = x - p.x, dy = y - p.y;
+      if (dx > R || dx < -R || dy > R || dy < -R) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > R2 || d2 < 0.0001) continue;
+      const d = Math.sqrt(d2);
+      const fall = 1 - d / R;
+      const amt = F * fall * fall * p.w;
+      const ux = dx / d, uy = dy / d;
+      if (mode === "push"){ vx += ux * amt; vy += uy * amt; }
+      else if (mode === "pull"){ vx -= ux * amt * 0.75; vy -= uy * amt * 0.75; }
+      else { vx += -uy * amt * 1.1 + ux * amt * 0.25; vy += ux * amt * 1.1 + uy * amt * 0.25; }
+    }
+    vx *= damp; vy *= damp;
+    x += vx; y += vy;
+    N[i] = x; N[i+1] = y; N[i+2] = vx; N[i+3] = vy;
+    const ox = x - N[i+4], oy = y - N[i+5];
+    if (ox * ox + oy * oy > 9) active++;
+  }
+  return active;
+}
+
+/* ---------------- color por desplazamiento ---------------- */
+const LEVELS = 6, MAXD = 70;
+const PALETTE = [];
+for (let i = 0; i < LEVELS; i++){
+  const t = i / (LEVELS - 1);
+  const r = Math.round(40 + t * 215);
+  const g = Math.round(195 - t * 116);
+  const b = Math.round(205 - t * 29);
+  PALETTE.push(`rgba(${r},${g},${b},${(0.2 + t * 0.72).toFixed(3)})`);
+}
+
+/* ---------------- dibujo ---------------- */
+function draw(f, pts){
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = `rgba(7,10,13,${(1 - P.trail).toFixed(3)})`;
+  ctx.fillRect(0, 0, W, H);
+
+  if (P.opacity > 0.002 && video.readyState >= 2){
+    ctx.save();
+    ctx.globalAlpha = P.opacity;
+    try { ctx.filter = `saturate(${Math.round((1 - P.desat) * 100)}%) contrast(118%)`; } catch {}
+    if (P.mirror){ ctx.translate(W, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, P.mirror ? W - f.dx - f.dw : f.dx, f.dy, f.dw, f.dh);
+    ctx.restore();
+    try { ctx.filter = "none"; } catch {}
+  }
+
+  if (!N) return;
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineWidth = P.width;
+  ctx.lineCap = "round";
+
+  const segs = Array.from({ length:LEVELS }, () => []);
+  const lvl = new Uint8Array(cols * rows);
+  for (let n = 0; n < cols * rows; n++){
+    const i = n * 6;
+    const ox = N[i] - N[i+4], oy = N[i+1] - N[i+5];
+    const d = Math.sqrt(ox * ox + oy * oy);
+    lvl[n] = Math.min(LEVELS - 1, Math.floor((d / MAXD) * LEVELS));
+  }
+  for (let r = 0; r < rows; r++){
+    for (let c = 0; c < cols; c++){
+      const n = r * cols + c, i = n * 6;
+      if (c < cols - 1){
+        const m = n + 1, j = m * 6;
+        segs[Math.max(lvl[n], lvl[m])].push(N[i], N[i+1], N[j], N[j+1]);
+      }
+      if (r < rows - 1){
+        const m = n + cols, j = m * 6;
+        segs[Math.max(lvl[n], lvl[m])].push(N[i], N[i+1], N[j], N[j+1]);
+      }
+    }
+  }
+  for (let L = 0; L < LEVELS; L++){
+    const s = segs[L];
+    if (!s.length) continue;
+    ctx.strokeStyle = PALETTE[L];
+    ctx.lineWidth = P.width * (1 + L * 0.22);
+    ctx.beginPath();
+    for (let k = 0; k < s.length; k += 4){ ctx.moveTo(s[k], s[k+1]); ctx.lineTo(s[k+2], s[k+3]); }
+    ctx.stroke();
+  }
+
+  if (P.dots){
+    for (let n = 0; n < cols * rows; n++){
+      const L = lvl[n];
+      if (L === 0) continue;
+      const i = n * 6;
+      ctx.fillStyle = PALETTE[L];
+      const s = 0.8 + L * 0.65;
+      ctx.beginPath(); ctx.arc(N[i], N[i+1], s, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  // esqueleto: local o remoto
+  if (P.skeleton){
+    ctx.strokeStyle = "rgba(255,194,74,0.55)";
+    ctx.fillStyle = "rgba(255,194,74,0.85)";
+    ctx.lineWidth = 1.4;
+    if (lastPose){
+      ctx.beginPath();
+      for (const [a, b] of POSE_BONES){
+        const A = toCanvas(lastPose[a], f), B = toCanvas(lastPose[b], f);
+        ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y);
+      }
+      ctx.stroke();
+    }
+    // manos: locales + remotas frescas
+    const drawHands = [];
+    for (const h of lastHands) drawHands.push(h);
+    if (P.remote && remoteHands && (performance.now() - remoteFresh < 600)){
+      for (const h of remoteHands) drawHands.push(h);
+    }
+    for (const hand of drawHands){
+      ctx.beginPath();
+      for (const [a, b] of HAND_BONES){
+        const A = toCanvas(hand[a], f), B = toCanvas(hand[b], f);
+        ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y);
+      }
+      ctx.stroke();
+      for (const lm of hand){
+        const p = toCanvas(lm, f);
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 6.2832); ctx.fill();
+      }
+    }
+    if (tracking === "movimiento"){
+      for (const p of pts){ ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 6.2832); ctx.fill(); }
+    }
+  }
+  ctx.globalCompositeOperation = "source-over";
+}
+
+/* ---------------- bucle ---------------- */
+let fpsT = performance.now(), fpsN = 0;
+const rFps = document.getElementById("r-fps"), rHands = document.getElementById("r-hands"),
+      rPose = document.getElementById("r-pose"), rPts = document.getElementById("r-pts");
+
+function loop(){
+  requestAnimationFrame(loop);
+  if (!N) return;
+  const f = fit();
+  const raw = collect(f);
+  influencers = smoothPoints(raw);
+  const active = simulate(influencers);
+  draw(f, influencers);
+
+  fpsN++;
+  const now = performance.now();
+  if (now - fpsT > 500){
+    rFps.textContent = Math.round(fpsN * 1000 / (now - fpsT));
+    rHands.textContent = handsCount;
+    rPose.textContent = poseOn ? "sí" : "no";
+    rPts.textContent = active;
+    fpsT = now; fpsN = 0;
+  }
+}
+
+/* suavizado temporal */
+let prevPts = [];
+function smoothPoints(pts){
+  const a = P.smooth;
+  if (a <= 0.01 || prevPts.length !== pts.length){
+    prevPts = pts.map(p => ({ ...p }));
+    return prevPts;
+  }
+  for (let i = 0; i < pts.length; i++){
+    prevPts[i].x += (pts[i].x - prevPts[i].x) * (1 - a);
+    prevPts[i].y += (pts[i].y - prevPts[i].y) * (1 - a);
+    prevPts[i].w = pts[i].w;
+  }
+  return prevPts;
+}
+
+/* ---------------- controles ---------------- */
+const fmt = {
+  radius: v => Math.round(v) + " px",
+  force:  v => (+v).toFixed(2),
+  smooth: v => Math.round(v * 100) + " %",
+  op:     v => Math.round(v * 100) + " %",
+  sat:    v => Math.round(v * 100) + " %",
+  dens:   v => Math.round(v) + " col",
+  stiff:  v => (+v).toFixed(3),
+  damp:   v => (+v).toFixed(3),
+  width:  v => (+v).toFixed(1) + " px",
+  trail:  v => Math.round(v * 100) + " %"
+};
+function bind(id, key, fmtKey, after){
+  const el = document.getElementById("c-" + id), out = document.getElementById("o-" + id);
+  const sync = () => { P[key] = parseFloat(el.value); if (out) out.textContent = fmt[fmtKey](el.value); if (after) after(); };
+  el.addEventListener("input", sync); sync();
+}
+bind("radius","radius","radius");
+bind("force","force","force");
+bind("smooth","smooth","smooth");
+bind("op","opacity","op");
+bind("sat","desat","sat");
+bind("dens","density","dens", buildGrid);
+bind("stiff","stiff","stiff");
+bind("damp","damp","damp");
+bind("width","width","width");
+bind("trail","trail","trail");
+
+function sw(id, key){
+  const el = document.getElementById("c-" + id);
+  const sync = () => { P[key] = el.checked; };
+  el.addEventListener("change", sync); sync();
+}
+sw("mirror","mirror"); sw("skel","skeleton"); sw("dots","dots");
+sw("hands","hands"); sw("body","body"); sw("remote","remote");
+
+const modeLabels = { push:"empuje", pull:"atracción", vortex:"vórtice" };
+document.getElementById("c-mode").addEventListener("click", e => {
+  const b = e.target.closest("button[data-mode]"); if (!b) return;
+  P.mode = b.dataset.mode;
+  for (const el of e.currentTarget.querySelectorAll("button"))
+    el.setAttribute("aria-pressed", String(el === b));
+  document.getElementById("o-mode").textContent = modeLabels[P.mode];
+});
+
+document.getElementById("b-full").addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else stage.requestFullscreen?.().catch(() => {});
+});
+document.getElementById("b-clean").addEventListener("click", () => {
+  document.body.classList.toggle("clean"); setTimeout(resize, 60);
+});
+document.getElementById("b-reset").addEventListener("click", resetGrid);
+document.getElementById("b-shot").addEventListener("click", () => {
+  // bug fix: toBlob (no bloquea el hilo como toDataURL)
+  canvas.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.download = "reticula-" + Date.now() + ".png";
+    a.href = url;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, "image/png");
+});
+addEventListener("keydown", e => {
+  if (e.target.matches("input,button,textarea,select")) return;
+  const k = e.key.toLowerCase();
+  if (k === "h"){ document.body.classList.toggle("clean"); setTimeout(resize, 60); }
+  if (k === "f") document.getElementById("b-full").click();
+  if (k === "r") resetGrid();
+});
+document.addEventListener("fullscreenchange", () => setTimeout(resize, 80));
+
+/* ---------------- arranque ---------------- */
+resize();
+connectRemote();
+requestAnimationFrame(loop);   // el loop corre aunque no haya cámara local
+</script>
+</body>
+</html>
